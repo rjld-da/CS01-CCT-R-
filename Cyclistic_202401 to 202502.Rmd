@@ -1,0 +1,851 @@
+---
+title: "Cyclistic_202401 TO 202502"
+author: "rjld"
+date: "2025-03-30"
+output: html_document
+---
+
+```{r setup,  include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+# Define a custom color for member_casual
+custom_colors <- c("member" = "#1B9E77",  # Green for members
+                   "casual" = "#D95F02")  # Orange for casual users
+
+# Define a custom theme for all plots
+custom_theme <- theme_minimal() + 
+  theme(
+    text = element_text(size = 14),  # Increase overall text size
+    panel.grid.major.x = element_blank(),  
+    panel.grid.minor.x = element_blank(),  
+    panel.grid.major.y = element_line(color = "grey80"),  
+    panel.grid.minor.y = element_line(color = "grey60", linetype = "dotted"),
+    panel.background = element_rect(fill = "transparent", color = NA),  
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 10, face = "italic")
+  )
+```
+
+## PREREQUISITES 
+Please install these packages first before running:
+install.packages('tidyverse')
+install.packages('lubridate')
+install.packages('ggplot2')
+#### Loading necessary libraries
+packages
+```{r}
+library(tidyverse) 
+library(dplyr)
+library(lubridate)
+library(vroom)
+library(readr)
+library(ggplot2)
+```
+
+#### List all datasets
+```{r}
+csv_files <- list.files("D:/Users/rjlde/Documents/+STUDY FILES+/2025 CASE STUDIES/CASE STUDY 1/RPROJ/10014985/2025_CS01_Cyclistic/CSV", pattern = "*.csv", full.names = TRUE)
+
+```
+
+#### combine CSV data
+```{r}
+df_merged <- csv_files %>%
+  lapply(read_csv, col_types = cols()) %>% 
+  bind_rows()
+```
+
+#### CONVERT DATA TYPES to datetime
+```{r}
+df_merged_converted <- df_merged %>%
+  mutate(
+    started_at = ymd_hms(started_at, tz = "UTC"),   # Convert to datetime
+    ended_at = ymd_hms(ended_at, tz = "UTC"),       # Convert to datetime
+    day_of_the_week = as.integer(day_of_the_week)   # Convert to integer
+  )
+```
+
+
+### FILTER DATE RANGE
+```{r}
+df_merged_filtered <- df_merged_converted %>%
+  mutate(date_only = as.Date(started_at))
+```
+
+```{r}
+df_merged_filtered <- df_merged_filtered %>%
+    filter(date_only >= '2024-01-01' & date_only <= '2025-02-28')
+```
+
+check:
+```{r}
+df_merged_filtered %>%
+   mutate(month = floor_date(date_only, "month")) %>%
+  group_by(month) %>%
+ summarise(count = n()) %>%
+  arrange(month)
+```
+
+#### SAVE AS CSV FILE MERGED DATASETS
+```{r}
+write_csv(df_merged_filtered, "D:/Users/rjlde/Documents/+STUDY FILES+/2025 CASE STUDIES/CASE STUDY 1/RPROJ/10014985/2025_CS01_Cyclistic/df_merged_filtered.csv")
+```
+
+## LOAD & CHECK CLEAN DATA FROM MERGED CSV FILE
+
+#### use new file a sdataset
+
+```{r}
+df_cleaned <- read_csv("D:/Users/rjlde/Documents/+STUDY FILES+/2025 CASE STUDIES/CASE STUDY 1/RPROJ/10014985/2025_CS01_Cyclistic/df_merged_filtered.csv")
+```
+#### remove duplicates
+
+```{r}
+df_cleaned_distinct <- df_cleaned %>%
+  distinct(ride_id, .keep_all = TRUE)  # Keeps only one row per unique ride_id
+```
+
+#### cleaning ride_length
+```{r}
+library(dplyr)
+
+# Step 1: Remove rows where ride_length is NA and update df_cleaned_distinct
+df_cleaned_distinct <- df_cleaned_distinct %>%
+  filter(!is.na(ride_length))  # Remove rows with NA values in ride_length
+
+```
+#### Basic Data Structure Check
+
+Check integrity of table
+
+```{r}
+glimpse(df_cleaned_distinct)  # Overview of columns & types
+head(df_cleaned_distinct)     # First few rows
+summary(df_cleaned_distinct)  # Summary statistics
+```
+
+#### Check Missing Values
+
+```{r}
+colSums(is.na(df_cleaned_distinct))  
+```
+
+
+## ANALYSIS VISUALIZATION
+
+If all is well for steps above, continue with analysis.
+
+### Total Count of Trips by User Type 202401 to 202502
+
+Determine total # of trips for span of 202401 to 202502 dataset. Show % and group by member_casual
+```{r}
+library(ggplot2)
+
+# Count trips by user type
+overall_counts <- df_cleaned_distinct %>%
+  group_by(member_casual) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = round((count / sum(count)) * 100, 1))
+# Calculate total trips
+total_trips_overall <- sum(overall_counts$count)
+# Pie chart
+ggplot(overall_counts, aes(x = "", y = count, fill = member_casual)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(count, " (", percentage, "%)")), 
+            position = position_stack(vjust = 0.5)) +
+  labs(title = "Member vs Casual Trips",
+       subtitle = paste("January 2024 to February 2025\nTotal Trips:", total_trips_overall)) +
+  theme_void() + 
+  theme(legend.title = element_blank()) +
+  scale_fill_manual(values = c("member" = "#1B9E77",  # Green for members
+                               "casual" = "#D95F02")) # Orange for casual users  
+
+```
+
+### Total Count of Trips by User Type 202401 to 202412 (1 year)
+
+Determine total # of trips for span of 202401 to 202412 dataset. Show % and group by member_casual
+```{r}
+library(ggplot2)
+
+# Filter data for 2024
+df_2024 <- df_cleaned_distinct %>%
+  filter(year(started_at) == 2024)
+
+# Count trips by user type
+yearly_counts <- df_2024 %>%
+  group_by(member_casual) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = round((count / sum(count)) * 100, 1))
+
+# Calculate total trips for 2024
+total_trips_2024 <- sum(yearly_counts$count)
+
+# Pie chart for 2024
+ggplot(yearly_counts, aes(x = "", y = count, fill = member_casual)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  geom_text(aes(label = paste0(count, " (", percentage, "%)")), 
+            position = position_stack(vjust = 0.5), size = 5, fontface = "bold") +
+  labs(title = "Member vs Casual Trips",
+       subtitle = paste("January 2024 to December 2024\nTotal Trips:", total_trips_2024)) +  # ✅ Updated caption
+  theme_void() + 
+  theme(legend.title = element_blank()) +
+  scale_fill_manual(values = c("member" = "#1B9E77",  # Green for members
+                               "casual" = "#D95F02")) # Orange for casual users
+```
+
+
+
+### TIME-BASED ANALYSIS
+
+#### When Do Members VS Causal Cyclists Travel the Most? Monthly (January 2024 to February 2025)
+```{r}
+library(ggplot2)
+# Aggregate monthly trip counts
+monthly_trend <- df_cleaned_distinct %>%
+  mutate(month = format(started_at, "%Y-%m")) %>%  # Extract year-month
+  group_by(month, member_casual) %>%
+  summarise(trips = n(), .groups = "drop")
+# Convert month to date format for correct ordering
+monthly_trend$month <- as.Date(paste0(monthly_trend$month, "-01"))
+# Updated custom theme with vertical grid lines
+custom_theme_v2 <- custom_theme +  
+  theme(panel.grid.major.x = element_line(color = "grey85", linetype = "dotted"))  # Add faint vertical grid lines
+# Plot trend line with improved alignment and custom colors
+ggplot(monthly_trend, aes(x = month, y = trips, color = member_casual, group = member_casual)) +
+  geom_line(linewidth = 1.2) +  # Trend line
+  geom_point(size = 2) +  # Add points for clarity
+  scale_x_date(date_labels = "%Y-%m", date_breaks = "1 month") +  # Format x-axis labels
+  scale_color_manual(values = custom_colors) +  # Apply custom colors
+  labs(title = "Monthly Trend of Member vs Casual Trips",
+       caption = "January 2024 to February 2025",
+       x = "Month",
+       y = "Number of Trips",
+       color = "User Type") +
+  custom_theme_v2 +  # Apply updated theme
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels
+```
+
+
+#### When Do Members VS Causal Cyclists Travel the Most? Day-of the-week (January 2024 to February 2025)
+```{r}
+library(ggplot2)
+
+# Define weekday labels (1 = Sunday, 7 = Saturday)
+weekday_labels <- c("1" = "Sunday", "2" = "Monday", "3" = "Tuesday", 
+                    "4" = "Wednesday", "5" = "Thursday", "6" = "Friday", "7" = "Saturday")
+
+# Aggregate trips by day of the week
+day_trend <- df_cleaned_distinct %>%
+  group_by(day_of_the_week, member_casual) %>%
+  summarise(trips = n(), .groups = "drop") %>%
+  mutate(day_of_the_week = factor(day_of_the_week, 
+                                  levels = 1:7,  # Ensure correct order
+                                  labels = weekday_labels))  # Convert to names
+
+# Plot with bars + trendline
+ggplot(day_trend, aes(x = day_of_the_week, y = trips, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +  # Bars with transparency
+  geom_line(aes(group = member_casual, color = member_casual), 
+            linewidth = 1.2) +  # Trendline overlay
+  geom_point(aes(color = member_casual), size = 3) +  # Highlight data points
+  scale_fill_manual(values = custom_colors) +  # Bar colors
+  scale_color_manual(values = custom_colors) +  # Line colors
+  labs(title = "Day of the Week Trend: Member vs Casual Trips",
+       subtitle = "January 2024 to February 2025",
+       x = "Day of the Week",
+       y = "Number of Trips",
+       fill = "User Type",
+       color = "User Type") +
+  custom_theme +  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate labels for readability
+```
+
+#### When Do Members VS Causal Cyclists Travel the Most? Hour-of-the-Day Total Number of Trips (January 2024 to February 2025)
+
+Determining hour of the day with highest count of trips
+```{r}
+# Convert datetime column to extract hour
+df_cleaned_distinct$hour <- hour(df_cleaned_distinct$started_at)  # Extract hour from 'started_at' column
+
+# Count trips per hour
+hourly_trips <- df_cleaned_distinct %>%
+  group_by(hour) %>%
+  summarise(count = n(), .groups = "drop")
+
+# Plot trips by hour
+ggplot(hourly_trips, aes(x = factor(hour), y = count, fill = hour)) +  
+  geom_bar(stat = "identity") +
+  scale_y_continuous(
+    breaks = seq(0, max(hourly_trips), by = 1500),  
+    minor_breaks = seq(0, max(hourly_trips), by = 500)  # Try smaller increments
+  ) +
+  
+# Custom color scale: Night (Blue) → Day (Yellow/Orange) → Night (Blue)
+  scale_fill_gradientn(colors = c("#1B3764", "#3F51B5", "#FFEB3B", "#FB8C00", "#3F51B5", "#1B3764")) +
+  
+# Labels and styling
+  labs(x = "Hour of the Day", 
+       y = "Number of Trips", 
+       title = "Total Number of Trips by Hour-of-the-Day",
+       caption ="January 2024 to February 2025") +
+  custom_theme + 
+  theme(legend.position = "none")  # Remove legend (since it's a time progression)
+```
+
+
+#### When Do Members VS Causal Cyclists Travel the Most? Hour-of-the-Day Total Number of Trips (January 2024 to February 2025)
+Determining hour of the day with highest count of trips separated by member_casual
+```{r}
+library(ggplot2)
+
+# Extract hour and format as "HH:00"
+df_cleaned_distinct <- df_cleaned_distinct %>%
+  mutate(hour = factor(hour(started_at), levels = 0:23, labels = sprintf("%02d:00", 0:23)))  
+
+# Aggregate trips by hour
+hourly_trend <- df_cleaned_distinct %>%
+  group_by(hour, member_casual) %>%
+  summarise(trips = n(), .groups = "drop")
+
+# Plot with bars + trendline
+ggplot(hourly_trend, aes(x = hour, y = trips, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +  # Bars for hourly count
+  geom_line(aes(group = member_casual, color = member_casual), 
+            linewidth = 1.2) +  # Trendline overlay
+  geom_point(aes(color = member_casual), size = 3) +  # Highlight data points
+  scale_fill_manual(values = custom_colors) +  # Bar colors
+  scale_color_manual(values = custom_colors) +  # Line colors
+  labs(title = "Hourly Trend: Member vs Casual Trips",
+       subtitle = "January 2024 to February 2025",
+       x = "Hour of the Day",
+       y = "Number of Trips",
+       fill = "User Type",
+       color = "User Type") +
+  custom_theme +  
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))  # Rotate labels to 90 degrees
+```
+
+
+### DURATION-BASED ANALYSIS
+
+#####BOXPLOT: RIDE LENGTH, MEMBER VS CASUAL, NUMBER OF TRIPS
+<!--Boxplot (Best for Comparing Member vs. Casual Durations)
+Quickly shows median, quartiles, and outliers.Helps compare typical ride durations between members & casual users.-->
+```{r}
+# Calculate summary statistics (median, Q1, Q3) for annotation
+summary_stats <- df_cleaned_distinct %>%
+  group_by(member_casual) %>%
+  summarise(
+    Q1 = quantile(as.numeric(ride_length) / 60, 0.25, na.rm = TRUE),
+    Median = median(as.numeric(ride_length) / 60, na.rm = TRUE),
+    Q3 = quantile(as.numeric(ride_length) / 60, 0.75, na.rm = TRUE)
+  )
+
+ggplot(df_cleaned_distinct, aes(x = member_casual, y = as.numeric(ride_length) / 60, fill = member_casual)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 16, outlier.size = 2, alpha = 0.7) +
+  geom_text(data = summary_stats, aes(x = member_casual, y = Median, label = paste("Median:", round(Median, 1))), 
+            vjust = -0.5, fontface = "bold", color = "black", size = 5) +
+  geom_text(data = summary_stats, aes(x = member_casual, y = Q1, label = paste("Q1:", round(Q1, 1))), 
+            vjust = -0.5, color = "black", size = 4) +
+  geom_text(data = summary_stats, aes(x = member_casual, y = Q3, label = paste("Q3:", round(Q3, 1))), 
+            vjust = -0.5, color = "black", size = 4) +
+  scale_y_continuous(
+    name = "Ride Duration (Minutes)", 
+    limits = c(0, quantile(as.numeric(df_cleaned_distinct$ride_length) / 60, 0.99, na.rm = TRUE)),
+    breaks = seq(0, quantile(as.numeric(df_cleaned_distinct$ride_length) / 60, 0.99, na.rm = TRUE), by = 15)
+  ) +
+  scale_x_discrete(name = "User Type") +
+  scale_fill_manual(values = custom_colors) + 
+  labs(
+    title = "Ride Duration Comparison: Members vs. Casual Users",
+    subtitle = "Outliers shown in red",
+    caption = "January 2024 to February 2025"
+  ) +
+  custom_theme +
+  theme(legend.position = "none")
+```
+
+
+####GRAPH: AVERAGE RIDE_LENGTH BY DAY-OF-THE-WEEK, MEMBER VS CASUAL
+```{r}
+library(tidyverse)
+library(lubridate)
+
+# Step 1: Convert ride_length to minutes and create a new column ride_length_minutes
+df_cleaned_distinct <- df_cleaned_distinct %>%
+  mutate(ride_length_sec = as.numeric(ride_length),  # Convert to seconds
+         ride_length_minutes = ride_length_sec / 60)  # Convert to minutes
+
+# Step 2: Create a new column day_of_the_week_text to convert day_of_the_week (1 to 7) into text
+df_cleaned_distinct <- df_cleaned_distinct %>%
+  mutate(day_of_the_week_text = factor(day_of_the_week, 
+                                       levels = 1:7, 
+                                       labels = c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")))
+
+# Step 3: Remove NA values in ride_length_minutes (if any)
+df_cleaned_distinct <- df_cleaned_distinct %>%
+  filter(!is.na(ride_length_minutes))
+
+# Step 4: Group by day_of_the_week_text and member_casual and calculate the average ride_length_minutes
+df_avg_ride <- df_cleaned_distinct %>%
+  group_by(day_of_the_week_text, member_casual) %>%
+  summarise(avg_ride_length_minutes = mean(ride_length_minutes), .groups = "drop")
+
+# Step 5: Create the ggplot
+ggplot(df_avg_ride, aes(x = day_of_the_week_text, y = avg_ride_length_minutes, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("member" = "#1B9E77", "casual" = "#D95F02")) +  # Custom colors for member/casual
+  labs(title = "Average Ride Length by Day of the Week",
+       x = "Day of the Week",
+       y = "Average Ride Length (Minutes)",
+       caption = "Data: January 2024 to January 2025") +
+  theme_minimal() + 
+  theme(
+    text = element_text(size = 14),  # Increase overall text size
+    panel.grid.major.x = element_blank(),  
+    panel.grid.minor.x = element_blank(),  
+    panel.grid.major.y = element_line(color = "grey80"),  
+    panel.grid.minor.y = element_line(color = "grey60", linetype = "dotted"),
+    panel.background = element_rect(fill = "transparent", color = NA),  
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 12),
+    plot.caption = element_text(size = 10, face = "italic")
+  )
+
+```
+
+#### table OF RIDE LENGTH SUMMARY 
+Also referencing results from boxplot earlier
+```{r}
+# Calculate summary statistics (median, Q1, Q3) for annotation
+summary_stats <- df_cleaned_distinct %>%
+  group_by(member_casual) %>%
+  summarise(
+    Q1 = quantile(as.numeric(ride_length) / 60, 0.25, na.rm = TRUE),
+    Median = median(as.numeric(ride_length) / 60, na.rm = TRUE),
+    Q3 = quantile(as.numeric(ride_length) / 60, 0.75, na.rm = TRUE),
+    IQR = Q3 - Q1  # Interquartile Range
+  )
+
+# Define a threshold to exclude extreme outliers
+threshold_upper <- summary_stats$Q3 + 1.5 * summary_stats$IQR
+threshold_lower <- summary_stats$Q1 - 1.5 * summary_stats$IQR
+
+# Filter out outliers from df_cleaned_distinct
+df_filtered <- df_cleaned_distinct %>%
+  filter(
+    (as.numeric(ride_length) / 60) <= threshold_upper[match(member_casual, summary_stats$member_casual)] &
+    (as.numeric(ride_length) / 60) >= threshold_lower[match(member_casual, summary_stats$member_casual)]
+  )
+
+# Calculate ride statistics (average, max, min) excluding outliers
+ride_stats <- df_filtered %>%
+  group_by(member_casual) %>%
+  summarise(
+    avg_ride_length = mean(as.numeric(ride_length) / 60, na.rm = TRUE),
+    max_ride_length = max(as.numeric(ride_length) / 60, na.rm = TRUE),
+    min_ride_length = min(as.numeric(ride_length) / 60, na.rm = TRUE)
+  )
+
+# Calculate overall stats by combining both 'member' and 'casual'
+overall_stats <- df_filtered %>%
+  summarise(
+    avg_ride_length = mean(as.numeric(ride_length) / 60, na.rm = TRUE),
+    max_ride_length = max(as.numeric(ride_length) / 60, na.rm = TRUE),
+    min_ride_length = min(as.numeric(ride_length) / 60, na.rm = TRUE)
+  )
+
+# Add overall statistics to the ride_stats table
+ride_stats <- bind_rows(
+  tibble(member_casual = "Overall", avg_ride_length = overall_stats$avg_ride_length,
+         max_ride_length = overall_stats$max_ride_length, min_ride_length = overall_stats$min_ride_length),
+  ride_stats
+)
+
+# View the summary table
+write.csv(ride_stats, "ride_length_stats.csv", row.names = FALSE)
+print(ride_stats)
+
+```
+#### avg & max ride length graphical view
+```{r}
+# Set custom colors for the plot
+custom_colors <- c("member" = "#1B9E77",  # Green for members
+                   "casual" = "#D95F02",  # Orange for casual users
+                   "Overall" = "#7570B3")  # Blue for overall
+
+# Create the plot
+ggplot(ride_stats, aes(x = member_casual, y = avg_ride_length, fill = member_casual)) +
+  geom_bar(stat = "identity", position = "dodge", show.legend = FALSE) +
+  geom_bar(data = ride_stats, aes(x = member_casual, y = max_ride_length, fill = member_casual), 
+           stat = "identity", position = "dodge", alpha = 0.5, show.legend = FALSE) +
+  scale_fill_manual(values = custom_colors) + 
+  labs(
+    title = "Average and Maximum Ride Length by User Type",
+    x = "User Type",
+    y = "Ride Length (Minutes)",
+    caption = "Data: January 2024 to February 2025"
+  ) +
+  custom_theme + 
+  theme(legend.position = "none")
+```
+
+### RIDEABLE TYPE - pie chart -MEMBERS
+```{r}
+# Calculate the total count of trips by member_casual and rideable_type
+df_rideable_count <- df_cleaned_distinct %>%
+  group_by(member_casual, rideable_type) %>%
+  tally() %>%
+  ungroup() %>%
+  mutate(percentage = n / sum(n) * 100)  # Calculate the percentage for each group
+
+# Ensure that all rideable types are present for both member and casual
+df_rideable_count <- df_rideable_count %>%
+  complete(member_casual, rideable_type, fill = list(n = 0, percentage = 0))  # Fill missing combinations
+
+# Define shades of teal for members (lighter to darker shades)
+teal_colors <- c("electric_bike" = "#A6D8D0", "classic_bike" = "#4F9F9F", "electric_scooter" = "#1D7373")
+
+# Separate data for members
+df_members <- df_rideable_count %>% filter(member_casual == "member")
+
+# Create the pie chart for members with rideable type labeled with percentage
+ggplot(df_members, aes(x = "", y = n, fill = rideable_type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +  # Convert to pie chart
+  scale_fill_manual(values = teal_colors) +  # Use the shades of teal
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), color = "white", size = 5) +  # Add percentage labels inside pie
+  labs(title = "Members' Preferred Ride Type", 
+       caption = "January 2024 to February 2025", 
+       fill = "Rideable Type") +
+  theme_void() +  # Clean up the chart
+  theme(
+    legend.position = "right",  # Move the legend to the side
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+```
+
+####  RIDEABLE TYPE - pie chart -CASUALS
+```{r}
+# Define shades of orange for casuals (lighter to darker shades)
+orange_colors <- c("electric_bike" = "#FFB84D", "classic_bike" = "#FF7F32", "electric_scooter" = "#FF4C00")
+
+# Separate data for casuals
+df_casuals <- df_rideable_count %>% filter(member_casual == "casual")
+
+# Create the pie chart for casuals with rideable type labeled with percentage
+ggplot(df_casuals, aes(x = "", y = n, fill = rideable_type)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar(theta = "y") +  # Convert to pie chart
+  scale_fill_manual(values = orange_colors) +  # Use the shades of orange
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), 
+            position = position_stack(vjust = 0.5), color = "white", size = 5) +  # Add percentage labels inside pie
+  labs(title = "Casuals' Preferred Ride Type", 
+       caption = "January 2024 to February 2025", 
+       fill = "Rideable Type") +
+  theme_void() +  # Clean up the chart
+  theme(
+    legend.position = "right",  # Move the legend to the side
+    legend.title = element_text(size = 12),
+    legend.text = element_text(size = 10),
+    plot.title = element_text(size = 16, face = "bold")
+  )
+```
+
+
+### LOCATION-BASED ANALYSIS 
+
+#### TOP 10 start stations -casual
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Count rides by start latitude & longitude (without using station names for counting)
+top_start_stations <- df_cleaned_distinct %>%
+  group_by(member_casual, start_lat, start_lng) %>%
+  summarise(trip_count = n(), .groups = "drop") %>%
+  arrange(member_casual, desc(trip_count))
+
+# Get top 10 start locations per member type
+top_10_members <- top_start_stations %>%
+  filter(member_casual == "member") %>%
+  slice_max(order_by = trip_count, n = 10)
+
+top_10_casual <- top_start_stations %>%
+  filter(member_casual == "casual") %>%
+  slice_max(order_by = trip_count, n = 10)
+
+# Merge with original data to get station names (if available)
+top_10_members <- top_10_members %>%
+  left_join(df_cleaned_distinct %>% select(start_lat, start_lng, start_station_name) %>% distinct(), 
+            by = c("start_lat", "start_lng"))
+
+top_10_casual <- top_10_casual %>%
+  left_join(df_cleaned_distinct %>% select(start_lat, start_lng, start_station_name) %>% distinct(), 
+            by = c("start_lat", "start_lng"))
+
+# Create display column: Use station name if available, otherwise show GPS coordinates
+top_10_members <- top_10_members %>%
+  mutate(start_display = ifelse(!is.na(start_station_name), start_station_name, paste0("(", start_lat, ", ", start_lng, ")")))
+
+top_10_casual <- top_10_casual %>%
+  mutate(start_display = ifelse(!is.na(start_station_name), start_station_name, paste0("(", start_lat, ", ", start_lng, ")")))
+
+# Sort data to ensure top 1 is at the top for plotting (for both members and casual)
+top_10_members <- top_10_members %>%
+  arrange(desc(trip_count))
+
+top_10_casual <- top_10_casual %>%
+  arrange(desc(trip_count))
+
+# Plot for members
+p_member_start <- ggplot(top_10_members, aes(x = trip_count, y = reorder(start_display, trip_count), fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 Start Locations - Members", x = "Trip Count", y = "Start Location") +
+  scale_fill_manual(values = c("member" = "#1B9E77")) +
+  theme_minimal()
+
+# Plot for casual users
+p_casual_start <- ggplot(top_10_casual, aes(x = trip_count, y = reorder(start_display, trip_count), fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 Start Locations - Casual Users", x = "Trip Count", y = "Start Location") +
+  scale_fill_manual(values = c("casual" = "#D95F02")) +
+  theme_minimal()
+
+# Print plots
+print(p_casual_start)
+```
+
+#### TOP 10 start stations- member
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Count rides by start latitude & longitude (without using station names for counting)
+top_start_stations <- df_cleaned_distinct %>%
+  group_by(member_casual, start_lat, start_lng) %>%
+  summarise(trip_count = n(), .groups = "drop") %>%
+  arrange(member_casual, desc(trip_count))
+
+# Get top 10 start locations for members
+top_10_members <- top_start_stations %>%
+  filter(member_casual == "member") %>%
+  slice_max(order_by = trip_count, n = 10)
+
+# Merge with original data to get station names (if available)
+top_10_members <- top_10_members %>%
+  left_join(df_cleaned_distinct %>% select(start_lat, start_lng, start_station_name) %>% distinct(), 
+            by = c("start_lat", "start_lng"))
+
+# Create display column: Use station name if available, otherwise show GPS coordinates
+top_10_members <- top_10_members %>%
+  mutate(start_display = ifelse(!is.na(start_station_name), start_station_name, paste0("(", start_lat, ", ", start_lng, ")")))
+
+# Ensure no duplicates in the final top 10, keeping only the highest trip count for each location
+top_10_members <- top_10_members %>%
+  distinct(start_display, .keep_all = TRUE)  # This ensures unique start_display values
+
+# Sort the data by trip_count in descending order
+top_10_members <- top_10_members %>%
+  arrange(desc(trip_count))
+
+# Convert start_display to a factor with levels in the order of trip_count
+top_10_members$start_display <- factor(top_10_members$start_display, 
+                                       levels = top_10_members$start_display)
+
+# Plot for members (now ordered correctly)
+p_member_start <- ggplot(top_10_members, aes(x = trip_count, y = start_display, fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 Start Locations - Members", x = "Trip Count", y = "Start Location") +
+  scale_fill_manual(values = c("member" = "#1B9E77")) +
+  theme_minimal()
+
+# Print the plot for members
+print(p_member_start)
+```
+
+
+#### TOP 10 end stations -casual
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Function to get top 10 end stations for a given rider type
+get_top_end_stations <- function(df_cleaned_distinct, rider_type) {
+  df_cleaned_distinct %>%
+    filter(member_casual == rider_type) %>%
+    group_by(end_lat, end_lng) %>%
+    summarise(count = n(), .groups = "drop") %>%
+    arrange(desc(count)) %>%
+    slice_head(n = 10) %>%  # Get top 10
+    left_join(df_cleaned_distinct %>% select(end_lat, end_lng, end_station_name) %>% distinct(), 
+              by = c("end_lat", "end_lng")) %>%
+    mutate(end_station_name = ifelse(is.na(end_station_name), "[Unknown Station]", end_station_name))
+}
+
+# Get top 10 end stations for members and casual riders
+top_end_stations_member <- get_top_end_stations(df_cleaned_distinct, "member")
+top_end_stations_casual <- get_top_end_stations(df_cleaned_distinct, "casual")
+
+# Plot for casual riders
+ggplot(top_end_stations_casual, aes(x = count, y = reorder(end_station_name, count), fill = "casual")) +
+  geom_bar(stat = "identity", color = "white", alpha = 0.8) +
+  scale_fill_manual(values = c("casual" = "#D95F02")) +  
+  labs(title = "Top 10 End Stations for Casual Riders",
+       x = "Trip Count",
+       y = "End Station Name") +
+  theme_minimal()
+
+print("Top 10 End Stations for Casual Riders")
+print(top_end_stations_casual)
+
+```
+
+#### TOP 10 end stations -member& casual
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Count rides by end latitude & longitude (without using station names for counting)
+top_end_stations <- df_cleaned_distinct %>%
+  group_by(member_casual, end_lat, end_lng) %>%
+  summarise(trip_count = n(), .groups = "drop") %>%
+  arrange(member_casual, desc(trip_count))
+
+# Get top 10 end locations for members
+top_10_members_end <- top_end_stations %>%
+  filter(member_casual == "member") %>%
+  slice_max(order_by = trip_count, n = 10)
+
+# Get top 10 end locations for casual users
+top_10_casual_end <- top_end_stations %>%
+  filter(member_casual == "casual") %>%
+  slice_max(order_by = trip_count, n = 10)
+
+# Merge with original data to get station names (if available)
+top_10_members_end <- top_10_members_end %>%
+  left_join(df_cleaned_distinct %>% select(end_lat, end_lng, end_station_name) %>% distinct(), 
+            by = c("end_lat", "end_lng"))
+
+top_10_casual_end <- top_10_casual_end %>%
+  left_join(df_cleaned_distinct %>% select(end_lat, end_lng, end_station_name) %>% distinct(), 
+            by = c("end_lat", "end_lng"))
+
+# Create display column: Use station name if available, otherwise show GPS coordinates
+top_10_members_end <- top_10_members_end %>%
+  mutate(end_display = ifelse(!is.na(end_station_name), end_station_name, paste0("(", end_lat, ", ", end_lng, ")")))
+
+top_10_casual_end <- top_10_casual_end %>%
+  mutate(end_display = ifelse(!is.na(end_station_name), end_station_name, paste0("(", end_lat, ", ", end_lng, ")")))
+
+# Ensure no duplicates in the final top 10, keeping only the highest trip count for each location
+top_10_members_end <- top_10_members_end %>%
+  distinct(end_display, .keep_all = TRUE)
+
+top_10_casual_end <- top_10_casual_end %>%
+  distinct(end_display, .keep_all = TRUE)
+
+# Sort the data by trip_count in ascending order (reversed from the previous sorting)
+top_10_members_end <- top_10_members_end %>%
+  arrange(trip_count)  # Sorted ascending
+
+top_10_casual_end <- top_10_casual_end %>%
+  arrange(trip_count)  # Sorted ascending
+
+# Convert end_display to a factor with levels in the order of trip_count (ascending)
+top_10_members_end$end_display <- factor(top_10_members_end$end_display, 
+                                         levels = top_10_members_end$end_display)
+
+top_10_casual_end$end_display <- factor(top_10_casual_end$end_display, 
+                                         levels = top_10_casual_end$end_display)
+
+# Plot for members (end stations) - reversed order
+p_member_end <- ggplot(top_10_members_end, aes(x = trip_count, y = end_display, fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 End Locations - Members", x = "Trip Count", y = "End Location") +
+  scale_fill_manual(values = c("member" = "#1B9E77")) +
+  theme_minimal()
+
+# Plot for casual users (end stations) - reversed order
+p_casual_end <- ggplot(top_10_casual_end, aes(x = trip_count, y = end_display, fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 End Locations - Casual Users", x = "Trip Count", y = "End Location") +
+  scale_fill_manual(values = c("casual" = "#D95F02")) +
+  theme_minimal()
+
+# Print the plots for members and casual users (end stations) - reversed order
+print(p_member_end)
+print(p_casual_end)
+```
+
+
+#### TOP 10 STATION PAIRS -casual & member
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Step 1: Create a lookup table for station names based on exact GPS coordinates
+station_lookup <- df_cleaned_distinct %>%
+  select(start_lat, start_lng, start_station_name, end_lat, end_lng, end_station_name) %>%
+  distinct()
+
+# Step 2: Count trips based on exact GPS coordinates
+top_station_pairs_gps <- df_cleaned_distinct %>%
+  group_by(member_casual, start_lat, start_lng, end_lat, end_lng) %>%
+  summarise(trip_count = n(), .groups = "drop") %>%
+  arrange(member_casual, desc(trip_count))
+
+# Step 3: Get the top 5 station pairs for each member type
+top_10_members <- top_station_pairs_gps %>% filter(member_casual == "member") %>% slice_max(order_by = trip_count, n = 10)
+top_10_casual <- top_station_pairs_gps %>% filter(member_casual == "casual") %>% slice_max(order_by = trip_count, n = 10)
+
+# Step 4: Merge with station names (Exact Match)
+top_10_members <- top_10_members %>%
+  left_join(station_lookup, by = c("start_lat", "start_lng", "end_lat", "end_lng")) %>%
+  mutate(
+    station_pair_display = ifelse(!is.na(start_station_name) & !is.na(end_station_name),
+                                  paste(start_station_name, "→", end_station_name),
+                                  paste0("(", start_lat, ", ", start_lng, ") → (", end_lat, ", ", end_lng, ")"))
+  )
+
+top_10_casual <- top_10_casual %>%
+  left_join(station_lookup, by = c("start_lat", "start_lng", "end_lat", "end_lng")) %>%
+  mutate(
+    station_pair_display = ifelse(!is.na(start_station_name) & !is.na(end_station_name),
+                                  paste(start_station_name, "→", end_station_name),
+                                  paste0("(", start_lat, ", ", start_lng, ") → (", end_lat, ", ", end_lng, ")"))
+  )
+
+# Step 5: Plot for members
+p_member <- ggplot(top_10_members, aes(x = trip_count, y = reorder(station_pair_display, trip_count), fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 Station Pairs - Members", x = "Trip Count", y = "Station Pair") +
+  scale_fill_manual(values = c("member" = "#1B9E77")) +
+  theme_minimal()
+
+# Step 6: Plot for casual users
+p_casual <- ggplot(top_10_casual, aes(x = trip_count, y = reorder(station_pair_display, trip_count), fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Top 10 Station Pairs - Casual Users", x = "Trip Count", y = "Station Pair") +
+  scale_fill_manual(values = c("casual" = "#D95F02")) +
+  theme_minimal()
+
+# Print plots
+print(p_member) # delete print casual so member printed first
+print(p_casual) #copy paste whole code and print casual
+
+```
+
+
+
+
